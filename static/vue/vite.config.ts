@@ -12,7 +12,11 @@ export default defineConfig(({ command, mode, ssrBuild }) => {
         '@': fileURLToPath(new URL('./src', import.meta.url))
       }
     },
-    base: '/dist'
+    base: '/dist',
+    test: {
+      globals: true,
+      environment: 'jsdom'
+    }
   };
 
   const buildConfig = {

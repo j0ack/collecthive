@@ -30,7 +30,7 @@ repos:
         files: \.(vue|js|ts)$
         types: [file]
         language_version: system
-        args: ["--fix", "--no-ignore"]
+        args: ["--fix", "--no-ignore", "-c", "static/vue/.eslintrc.js"]
         additional_dependencies:
           - eslint@8.36.0
           - eslint-plugin-vue@9.9.0
