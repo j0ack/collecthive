@@ -1,12 +1,16 @@
 import { createApp, h } from 'vue';
 import type { App } from 'vue';
 import { createInertiaApp } from '@inertiajs/vue3';
+import './index.css';
 
 type StrOrNum = string | number
 
 declare global {
   interface Window {
-    reverseUrl(urlName: string, args?: Record<string, unknown> | StrOrNum | StrOrNum[]): string
+    reverseUrl(
+      urlName: string,
+      args?: Record<string, unknown> | StrOrNum | StrOrNum[]
+    ): string
   }
 }
 
@@ -15,7 +19,7 @@ const routePlugin = {
   install: (app: App, _options: Record<string, unknown>) => {
     app.config.globalProperties.$route = window.reverseUrl;
   }
-}
+};
 
 createInertiaApp({
   resolve: async name => {
@@ -28,4 +32,4 @@ createInertiaApp({
     vueApp.use(routePlugin);
     vueApp.mount(el);
   }
-})
+});

@@ -1,6 +1,6 @@
 MAKEFLAGS+="-j 2"
 
-FLASK_DEV=FLASK_APP="collecthive.app:create_app('dev')" FLASK_ENV=development
+FLASK_DEV=FLASK_APP="collecthive.app:create_app('dev')"
 
 init:
 	pip install -r requirements.txt
@@ -22,3 +22,9 @@ prod-vue:
 	@npm run --prefix "static/vue" build
 
 prod: prod-vue prod-python
+
+test-python:
+	@python3 -m pytest tests
+
+test-vue:
+	@npm run --prefix "static/vue" test:unit

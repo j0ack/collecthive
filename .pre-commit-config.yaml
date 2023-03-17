@@ -1,0 +1,38 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0
+    hooks:
+      - id: trailing-whitespace
+        exclude_types: [tsv, csv]
+      - id: end-of-file-fixer
+
+  - repo: https://github.com/PyCQA/flake8
+    rev: 6.0.0
+    hooks:
+      - id: flake8
+
+  - repo: https://github.com/ambv/black
+    rev: 22.12.0
+    hooks:
+      - id: black
+        args: ["-l", "89", "-t", "py38"]
+
+  - repo: https://github.com/PyCQA/isort
+    rev: 5.12.0
+    hooks:
+      - id: isort
+        args: ["--profile", "black"]
+
+  - repo: https://github.com/pre-commit/mirrors-eslint
+    rev: v8.33.0
+    hooks:
+      - id: eslint
+        files: \.(vue|js|ts)$
+        types: [file]
+        language_version: system
+        args: ["--fix", "--no-ignore", "-c", "static/vue/.eslintrc.js"]
+        additional_dependencies:
+          - eslint@8.36.0
+          - eslint-plugin-vue@9.9.0
+          - "@typescript-eslint/eslint-plugin"
+          - "@typescript-eslint/parser"
