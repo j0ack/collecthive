@@ -1,19 +1,17 @@
 """collecthive."""
 
 import json
-import os.path as op
+from pathlib import Path
 from typing import Any, Dict
 
 from flask import Flask, current_app
 from flask_inertia import Inertia, render_inertia
+from flask_pymongo import PyMongo
 
-ROOT_DIR = op.abspath(op.dirname(op.dirname(__file__)))
-MANIFEST_FILE = op.join(
-    ROOT_DIR,
-    "static",
-    "dist",
-    "manifest.json",
-)
+ROOT_DIR = Path(__file__).parents[1]
+MANIFEST_FILE = ROOT_DIR / "static" / "dist" / "manifest.json"
+
+mongo = PyMongo()
 
 
 def load_manifest() -> Dict[str, Dict[str, Any]]:
@@ -37,11 +35,13 @@ def create_app(config_filename: str) -> Flask:
     """Create app instance from Python config file."""
     app = Flask(
         __name__,
-        template_folder=op.join(ROOT_DIR, "templates"),
-        static_folder=op.join(ROOT_DIR, "static", "dist"),
+        template_folder=ROOT_DIR / "templates",
+        static_folder=ROOT_DIR / "static" / "dist",
     )
     app.config.from_pyfile(f"{config_filename}.py")
+
     Inertia(app)
+    mongo.init_app(app)
 
     app.context_processor(load_manifest)
 
