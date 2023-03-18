@@ -43,8 +43,9 @@ def create_app(config_filename: str) -> Flask:
     Inertia(app)
     mongo.init_app(app)
 
-    app.context_processor(load_manifest)
+    from collecthive.books.views import books_bp
 
     app.add_url_rule("/", "index", index)
+    app.register_blueprint(books_bp, url_prefix="/books")
 
     return app
