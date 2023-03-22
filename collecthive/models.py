@@ -1,6 +1,8 @@
 """Meta model for Pydantic objects."""
 
+from copy import deepcopy
 from datetime import datetime
+from typing import Any, Dict
 
 from bson.objectid import ObjectId
 from pydantic import BaseModel, Field
@@ -38,3 +40,13 @@ class CollectHiveModel(BaseModel):
 
     class Config:
         json_encoders = {ObjectId: str}
+
+    def dict(self) -> Dict[str, Any]:
+        """Override dict super method to serialize ObjectId."""
+        data = super().dict()
+        copy = deepcopy(data)
+        for key, value in data.items():
+            if isinstance(value, ObjectId):
+                copy[key] = str(value)
+
+        return copy

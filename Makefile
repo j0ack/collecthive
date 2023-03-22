@@ -7,7 +7,7 @@ init:
 	@npm --prefix "static/vue" install
 
 dev-python:
-	$(FLASK_DEV) flask run
+	$(FLASK_DEV) flask run --debug
 
 dev-vue:
 	@npm run --prefix "static/vue" build:dev

@@ -48,4 +48,6 @@ def create_app(config_filename: str) -> Flask:
     app.add_url_rule("/", "index", index)
     app.register_blueprint(books_bp, url_prefix="/books")
 
+    app.context_processor(load_manifest)
+
     return app
