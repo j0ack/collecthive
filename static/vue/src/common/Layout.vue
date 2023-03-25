@@ -1,8 +1,8 @@
 <template>
-  <header class="w-full mb-5">
-    <nav class="py-5 bg-zinc-900">
+  <header class="pure-menu pure-menu-horizontal layout-header">
+    <nav class="pure-menu-list nav">
       <Link
-        class="text-orange-400 mx-2 hover:text-orange-500"
+        class="pure-menu-item pure-menu-link link"
         v-for="link in links"
         :key="link.label"
         :href="link.endpoint"
@@ -10,12 +10,12 @@
         <Icon
           type="outlined"
           :icon="link.icon"
+          :label="link.label"
         />
-        <span class="align-middle pl-1">{{ link.label }}</span>
       </Link>
     </nav>
   </header>
-  <div class="container mx-auto w-3/4 font-mono">
+  <div class="layout-content">
     <slot />
   </div>
 </template>
@@ -55,3 +55,27 @@ export default defineComponent({
   }
 });
 </script>
+
+<style scoped>
+@import '../css/colors.css';
+
+.layout-header {
+  margin-bottom: 2rem;
+  background-color: $black;
+  > .nav {
+    padding: 1rem 0;
+  }
+  > .nav > .link {
+    color: $primary;
+  }
+  > .nav > .link:focus,
+  > .nav > .link:hover {
+    color: $primary-light;
+    background-color: $black;
+  }
+}
+.layout-content {
+  width: 80%;
+  margin: auto;
+}
+</style>

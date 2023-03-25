@@ -4,14 +4,16 @@ import json
 from pathlib import Path
 from typing import Any, Dict
 
-from flask import Flask, current_app
+from flask import Flask, current_app, get_flashed_messages, send_from_directory
 from flask_inertia import Inertia, render_inertia
 from flask_pymongo import PyMongo
+from werkzeug.utils import safe_join
 
 ROOT_DIR = Path(__file__).parents[1]
 MANIFEST_FILE = ROOT_DIR / "static" / "dist" / "manifest.json"
 
 mongo = PyMongo()
+inertia = Inertia()
 
 
 def load_manifest() -> Dict[str, Dict[str, Any]]:
@@ -31,6 +33,12 @@ def index():
     return render_inertia("Index")
 
 
+def uploads(folder: str, filename: str):
+    """Serve uploads file."""
+    filedir = safe_join(current_app.config["UPLOAD_DIR"], folder)
+    return send_from_directory(filedir, filename)
+
+
 def create_app(config_filename: str) -> Flask:
     """Create app instance from Python config file."""
     app = Flask(
@@ -40,14 +48,17 @@ def create_app(config_filename: str) -> Flask:
     )
     app.config.from_pyfile(f"{config_filename}.py")
 
-    Inertia(app)
+    inertia.init_app(app)
     mongo.init_app(app)
 
     from collecthive.books.views import books_bp
 
     app.add_url_rule("/", "index", index)
+    app.add_url_rule("/uploads/<string:folder>/<string:filename>", "uploads", uploads)
     app.register_blueprint(books_bp, url_prefix="/books")
 
     app.context_processor(load_manifest)
+
+    inertia.share("messages", get_flashed_messages)
 
     return app

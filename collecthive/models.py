@@ -48,5 +48,7 @@ class CollectHiveModel(BaseModel):
         for key, value in data.items():
             if isinstance(value, ObjectId):
                 copy[key] = str(value)
+            elif isinstance(value, datetime):
+                copy[key] = value.isoformat()
 
         return copy
