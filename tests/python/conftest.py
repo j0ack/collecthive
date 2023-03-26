@@ -10,7 +10,7 @@ from mongomock import MongoClient
 import collecthive.app
 
 
-@pytest.fixture()
+@pytest.fixture(scope="session")
 def app() -> Flask:
     class PyMongoMock(MongoClient):
         def init_app(self, app):
@@ -22,7 +22,7 @@ def app() -> Flask:
         yield app_
 
 
-@pytest.fixture()
+@pytest.fixture(scope="session")
 def client(app):
     with app.test_client() as testing_client:
         with app.app_context():

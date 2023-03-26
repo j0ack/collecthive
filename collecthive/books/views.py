@@ -2,7 +2,16 @@
 import math
 from typing import List
 
-from flask import Blueprint, Response, current_app, flash, redirect, request, url_for
+from flask import (
+    Blueprint,
+    Response,
+    abort,
+    current_app,
+    flash,
+    redirect,
+    request,
+    url_for,
+)
 from flask_inertia import render_inertia
 from pydantic import ValidationError, parse_obj_as
 
@@ -37,7 +46,10 @@ def index() -> Response:
 
 @books_bp.route("/<string:isbn>/", methods=["GET"])
 def book_detail(isbn: str) -> Response:
-    book_data = mongo.db.books.find_one_or_404({"isbn": isbn})
+    book_data = mongo.db.books.find_one({"isbn": isbn})
+    if not book_data:
+        abort(404)
+
     book = BookModel.parse_obj(book_data)
     return render_inertia("books/BookDetail", props={"book": book.dict()})
 
@@ -52,16 +64,37 @@ def create_book() -> Response:
 
 def create_book_post() -> Response:
     """Create book in db."""
-    data = dict(request.form)
+    data = {
+        "authors": [],
+    }
+    for key, value in request.form.items():
+        if key.startswith("authors"):
+            data["authors"].append(value)
+        else:
+            data[key] = value
+
     try:
         cover_file = request.files.get("coverFile")
         book = BookModel.parse_obj(data)
         book.save_cover(cover_file)
+
+        # if mongo.db.books.find_one({"isbn": book.isbn}) is not None:
+        #     raise ValidationError({
+        #         "loc": ("isbn",),
+        #         "msg": "ISBN already exists",
+        #    })
+
         mongo.db.books.insert_one(book.dict())
         flash("Book created", "success")
         return redirect(url_for("books.index"))
     except ValidationError as err:
-        page_data = {"errors": err.errors()}
+        inertia_errors = {}
+        for error in err.errors():
+            key = error["loc"][0]
+            value = error["msg"]
+            inertia_errors[key] = value
+
+        page_data = {"errors": inertia_errors}
         return render_inertia("books/CreateBook", props=page_data)
 
 
