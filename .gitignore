@@ -4,3 +4,4 @@ static/vue/node_modules/
 __pycache__
 *.py[cod]
 *.egg
+uploads/*

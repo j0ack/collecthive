@@ -1,7 +1,7 @@
 import { createApp, h } from 'vue';
 import type { App, DefineComponent } from 'vue';
 import { createInertiaApp } from '@inertiajs/vue3';
-import './index.css';
+import '@/css/index.css';
 
 type StrOrNum = string | number
 

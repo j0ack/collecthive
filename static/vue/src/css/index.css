@@ -1,0 +1,47 @@
+@import 'material-icons/iconfont/material-icons.css';
+@import 'purecss/build/pure-min.css';
+@import './colors.css';
+
+* {
+  padding: 0;
+  margin: 0;
+}
+
+body {
+  color: $black;
+}
+
+a {
+  color: $primary;
+}
+
+a:hover,
+a:visited {
+  color: $primary-dark;
+}
+
+.button-success,
+.button-error,
+.button-warning,
+.button-secondary,
+.button-primary {
+  color: $white;
+  border-radius: 4px;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
+}
+
+.button-primary {
+  background-color: $primary;
+}
+
+.button-secondary {
+  background: $primary-light;
+}
+
+.button-success {
+  background-color: $green;
+}
+
+.button-error {
+  background-color: $red;
+}
