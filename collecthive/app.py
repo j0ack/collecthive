@@ -4,10 +4,11 @@ import json
 from pathlib import Path
 from typing import Any, Dict
 
-from flask import Flask, current_app, get_flashed_messages, send_from_directory
+from flask import Flask, abort, current_app, get_flashed_messages, request
 from flask_inertia import Inertia, render_inertia
 from flask_pymongo import PyMongo
-from werkzeug.utils import safe_join
+from gridfs import GridFS, NoFile
+from werkzeug.wsgi import wrap_file
 
 ROOT_DIR = Path(__file__).parents[1]
 MANIFEST_FILE = ROOT_DIR / "static" / "dist" / "manifest.json"
@@ -33,10 +34,34 @@ def index():
     return render_inertia("Index")
 
 
-def uploads(folder: str, filename: str):
-    """Serve uploads file."""
-    filedir = safe_join(current_app.config["UPLOAD_DIR"], folder)
-    return send_from_directory(filedir, filename)
+def uploads(filename: str):
+    """Get uploaded files in GridFS.
+
+    Ovewrite `mongo.send_file` due to a bug.
+    see https://github.com/dcrosta/flask-pymongo/issues/153
+    """
+    cache_for = 31536000
+    storage = GridFS(mongo.db, "fs")
+
+    try:
+        fileobj = storage.get_version(filename=filename)
+    except NoFile:
+        abort(404)
+
+    # mostly copied from flask/helpers.py, with
+    # modifications for GridFS
+    data = wrap_file(request.environ, fileobj, buffer_size=1024 * 255)
+    response = current_app.response_class(
+        data,
+        mimetype=fileobj.content_type,
+        direct_passthrough=True,
+    )
+    response.content_length = fileobj.length
+    response.last_modified = fileobj.upload_date
+    response.cache_control.max_age = cache_for
+    response.cache_control.public = True
+    response.make_conditional(request)
+    return response
 
 
 def create_app(config_filename: str) -> Flask:
@@ -54,11 +79,11 @@ def create_app(config_filename: str) -> Flask:
     from collecthive.books.views import books_bp
 
     app.add_url_rule("/", "index", index)
-    app.add_url_rule("/uploads/<string:folder>/<string:filename>", "uploads", uploads)
+    app.add_url_rule("/uploads/<path:filename>", "uploads", uploads)
     app.register_blueprint(books_bp, url_prefix="/books")
 
     app.context_processor(load_manifest)
 
-    inertia.share("messages", get_flashed_messages)
+    inertia.share("messages", lambda: get_flashed_messages(with_categories=True))
 
     return app

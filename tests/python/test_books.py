@@ -1,4 +1,5 @@
 from http import HTTPStatus
+from io import BytesIO
 from unittest.mock import patch
 
 import pytest
@@ -40,10 +41,32 @@ def book(app, books_db):
 
 @pytest.fixture()
 def books(app, books_db):
-    breakpoint()
     books = [book.dict() for book in BookFactory.batch(1000)]
     books_db.insert_many(books)
     return books
+
+
+@pytest.fixture()
+def cover_file():
+    return (BytesIO(b"fake book cover"), "fake_image_file.jpg")
+
+
+@pytest.fixture()
+def book_form_data_factory():
+    def _make_form_data(isbn: str):
+        return {
+            "isbn": isbn,
+            "title": "Lorem ipsum",
+            "subtitle": "Dolor est",
+            "authors[0]": "John Doe",
+            "authors[1]": "Jane Doe",
+            "description": "Ut enim ad minim veniam, quis nostrud exercitation.",
+            "edition": "Stratacard",
+            "cover": None,
+            "status": "in_stock",
+        }
+
+    return _make_form_data
 
 
 class TestBookList:
@@ -112,9 +135,11 @@ class TestCreateBook:
 
         data = response.inertia("app")
         assert data.component == "books/CreateBook"
-        assert not hasattr(data.props, "book")
+        assert data.props.book is None
+        assert data.props.errors is None
 
-    def test_create_book_get_with_metadata(self, client, book):
+    def test_create_book_get_with_metadata(self, client):
+        book = BookFactory.build()
         with patch(
             "collecthive.books.views.get_book_metadata_from_isbn",
             return_value=book,
@@ -126,11 +151,12 @@ class TestCreateBook:
             data = response.inertia("app")
             assert data.component == "books/CreateBook"
             assert data.props.book.isbn == book.isbn
+            assert data.props.errors is None
 
-    def test_create_book_get_with_metadata_errors(self, client, book):
+    def test_create_book_get_with_metadata_already_exists(self, client, book):
         with patch(
             "collecthive.books.views.get_book_metadata_from_isbn",
-            side_effect=ValueError(),
+            return_value=book,
         ):
             response = client.get(url_for("books.create_book", isbn=book.isbn))
 
@@ -138,25 +164,29 @@ class TestCreateBook:
 
             data = response.inertia("app")
             assert data.component == "books/CreateBook"
-            assert not hasattr(data.props, "book")
-            assert hasattr(data.props, "errors")
+            assert data.props.book is None
+            assert data.props.errors.isbn == "ISBN already exists"
 
-    def test_create_book_post(self, client, books_db):
+    def test_create_book_get_with_metadata_errors(self, client, book):
+        with patch(
+            "collecthive.books.views.get_book_metadata_from_isbn",
+            side_effect=ValueError("Test"),
+        ):
+            response = client.get(url_for("books.create_book", isbn=book.isbn))
+
+            assert response.status_code == HTTPStatus.OK
+
+            data = response.inertia("app")
+            assert data.component == "books/CreateBook"
+            assert data.props.book is None
+            assert data.props.errors.isbn == "Test"
+
+    def test_create_book_post(self, client, books_db, book_form_data_factory):
         book = BookFactory.build()
-        query_book_data = {
-            "title": "Lorem ipsum",
-            "subtitle": "Dolor est",
-            "isbn": book.isbn,
-            "authors[0]": "John Doe",
-            "authors[1]": "Jane Doe",
-            "description": "Ut enim ad minim veniam, quis nostrud exercitation.",
-            "edition": "Stratacard",
-            "cover": None,
-            "status": "in_stock",
-        }
+        book_form_data = book_form_data_factory(book.isbn)
         response = client.post(
             url_for("books.create_book"),
-            data=query_book_data,
+            data=book_form_data,
             follow_redirects=True,
         )
 
@@ -177,43 +207,67 @@ class TestCreateBook:
         assert book_data.cover is None
         assert book_data.status == "in_stock"
 
-        assert data.props.messages == ["Book created"]
+        assert ["success", "Book created"] in data.props.messages
+
+    def test_create_book_post_with_cover(
+        self, client, books_db, book_form_data_factory, cover_file
+    ):
+        book = BookFactory.build()
+        book_form_data = book_form_data_factory(book.isbn)
+        book_form_data["coverFile"] = cover_file
+        response = client.post(
+            url_for("books.create_book"),
+            data=book_form_data,
+            content_type="multipart/form-data",
+            follow_redirects=True,
+        )
+
+        assert response.status_code == HTTPStatus.OK
+
+        data = response.inertia("app")
+        assert data.component == "books/Index"
+        book_data = data.props.books[-1]
+        assert book_data.title == "Lorem ipsum"
+        assert book_data.subtitle == "Dolor est"
+        assert book_data.isbn == book.isbn
+        assert book_data.authors == ["John Doe", "Jane Doe"]
+        assert (
+            book_data.description
+            == "Ut enim ad minim veniam, quis nostrud exercitation."  # noqa: W503
+        )
+        assert book_data.edition == "Stratacard"
+        assert book_data.cover == f"/uploads/books/{book.isbn}.jpg"
+        assert book_data.status == "in_stock"
+
+        assert ["success", "Book created"] in data.props.messages
 
     @pytest.mark.parametrize(
         "data,field",
         [
             (
                 {
-                    "title": "Lorem ipsum",
-                    "subtitle": "Dolor est",
                     "isbn": "123456",  # invalid isbn
-                    "authors[0]": "John Doe",
-                    "authors[1]": "Jane Doe",
-                    "description": "Ut enim ad minim veniam, quis nostrud exercitation.",
-                    "edition": "Stratacard",
-                    "cover": None,
-                    "status": "in_stock",
                 },
                 "isbn",
             ),
             (
                 {
-                    "title": "Lorem ipsum",
-                    "subtitle": "Dolor est",
-                    "isbn": "123456",  # invalid isbn
-                    "description": "Ut enim ad minim veniam, quis nostrud exercitation.",
-                    "edition": "Stratacard",
-                    "cover": None,
-                    "status": "invalid_status",
+                    "status": "invalid_status",  # invalid status
                 },
                 "status",
             ),
         ],
     )
-    def test_create_book_post_invalid_data(self, client, books_db, data, field):
+    def test_create_book_post_invalid_data(
+        self, client, books_db, book_form_data_factory, data, field
+    ):
+        book = BookFactory.build()
+        book_form_data = book_form_data_factory(book.isbn)
+        book_form_data.update(data)
+
         response = client.post(
             url_for("books.create_book"),
-            data=data,
+            data=book_form_data,
             follow_redirects=True,
         )
 
@@ -224,21 +278,13 @@ class TestCreateBook:
         assert hasattr(data.props, "errors")
         assert hasattr(data.props.errors, field)
 
-    def test_create_book_post_isbn_already_exists(self, client, book):
-        query_book = {
-            "title": "Lorem ipsum",
-            "subtitle": "Dolor est",
-            "isbn": book.isbn,
-            "authors[0]": "John Doe",
-            "authors[1]": "Jane Doe",
-            "description": "Ut enim ad minim veniam, quis nostrud exercitation.",
-            "edition": "Stratacard",
-            "cover": None,
-            "status": "in_stock",
-        }
+    def test_create_book_post_isbn_already_exists(
+        self, client, book, book_form_data_factory
+    ):
+        book_form_data = book_form_data_factory(book.isbn)
         response = client.post(
             url_for("books.create_book"),
-            data=query_book,
+            data=book_form_data,
             follow_redirects=True,
         )
 
@@ -249,9 +295,140 @@ class TestCreateBook:
         assert data.props.errors.isbn == "ISBN already exists"
 
 
-def test_update_book(client):
-    pass
+class TestUpdateBook:
+    def test_update_book(self, client, book, book_form_data_factory):
+        book_form_data = book_form_data_factory(book.isbn)
+        response = client.post(
+            url_for("books.update_book", isbn=book.isbn),
+            data=book_form_data,
+            follow_redirects=True,
+        )
+
+        assert response.status_code == HTTPStatus.OK
+
+        data = response.inertia("app")
+        assert data.component == "books/BookDetail"
+        assert ["success", "Book updated"] in data.props.messages
+
+        book_data = data.props.book
+        assert book_data.title == "Lorem ipsum"
+        assert book_data.subtitle == "Dolor est"
+        assert book_data.isbn == book.isbn
+        assert book_data.authors == ["John Doe", "Jane Doe"]
+        assert (
+            book_data.description
+            == "Ut enim ad minim veniam, quis nostrud exercitation."  # noqa: W503
+        )
+        assert book_data.edition == "Stratacard"
+        assert book_data.cover is None
+        assert book_data.status == "in_stock"
+
+    def test_update_inexistent_book(self, client, book_form_data_factory):
+        book = BookFactory.build()
+        book_form_data = book_form_data_factory(book.isbn)
+        response = client.post(
+            url_for("books.update_book", isbn=book.isbn),
+            data=book_form_data,
+            follow_redirects=True,
+        )
+
+        assert response.status_code == HTTPStatus.NOT_FOUND
+
+    def test_update_book_invalid_data(self, client, book, book_form_data_factory):
+        book_form_data = book_form_data_factory(book.isbn)
+        book_form_data["status"] = "invalid"
+
+        response = client.post(
+            url_for("books.update_book", isbn=book.isbn),
+            data=book_form_data,
+            follow_redirects=True,
+        )
+
+        assert response.status_code == HTTPStatus.OK
+
+        data = response.inertia("app")
+        assert data.component == "books/EditBook"
+        assert hasattr(data.props.errors, "status")
+
+        book_data = data.props.book
+        assert book_data.title == "Lorem ipsum"
+        assert book_data.subtitle == "Dolor est"
+        assert book_data.isbn == book.isbn
+        assert book_data.authors == ["John Doe", "Jane Doe"]
+        assert (
+            book_data.description
+            == "Ut enim ad minim veniam, quis nostrud exercitation."  # noqa: W503
+        )
+        assert book_data.edition == "Stratacard"
+        assert book_data.status == "invalid"
+
+    def test_update_book_cover(self, client, book, cover_file, book_form_data_factory):
+        book_form_data = book_form_data_factory(book.isbn)
+        book_form_data["coverFile"] = cover_file
+        response = client.post(
+            url_for("books.update_book", isbn=book.isbn),
+            data=book_form_data,
+            content_type="multipart/form-data",
+            follow_redirects=True,
+        )
+
+        assert response.status_code == HTTPStatus.OK
+
+        data = response.inertia("app")
+        assert data.component == "books/BookDetail"
+        book_data = data.props.book
+        assert book_data.title == "Lorem ipsum"
+        assert book_data.subtitle == "Dolor est"
+        assert book_data.isbn == book.isbn
+        assert book_data.authors == ["John Doe", "Jane Doe"]
+        assert (
+            book_data.description
+            == "Ut enim ad minim veniam, quis nostrud exercitation."  # noqa: W503
+        )
+        assert book_data.edition == "Stratacard"
+        assert book_data.cover == f"/uploads/books/{book.isbn}.jpg"
+        assert book_data.status == "in_stock"
+
+        assert ["success", "Book updated"] in data.props.messages
+
+    def update_book_get(self, client, book):
+        response = client.get(
+            url_for("books.update_book", isbn=book.isbn),
+        )
+
+        assert response.status_code == HTTPStatus.OK
+
+        data = response.inertia("app")
+        assert data.component == "books/EditBook"
+        assert data.props.book.isbn == book.isbn
+
+    def update_inexistent_book_get(self, client):
+        book = BookFactory.build()
+        response = client.get(
+            url_for("books.update_book", isbn=book.isbn),
+        )
+
+        assert response.status_code == HTTPStatus.NOT_FOUND
 
 
-def test_delete_book(client):
-    pass
+class TestDeleteBook:
+    def test_delete_book(self, client, book):
+        response = client.delete(
+            url_for("books.delete_book", isbn=book.isbn),
+            follow_redirects=True,
+        )
+
+        assert response.status_code == HTTPStatus.OK
+
+        data = response.inertia("app")
+        assert data.component == "books/Index"
+        assert ["success", "Book deleted"] in data.props.messages
+
+    def test_delete_book_invalid_isbn(self, client):
+        book = BookFactory.build()
+        response = client.delete(
+            url_for("books.delete_book", isbn=book.isbn),
+            follow_redirects=True,
+        )
+
+        assert response.status_code == HTTPStatus.NOT_FOUND
